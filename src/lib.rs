@@ -50,12 +50,20 @@ where
     }
 
     /// Sets some bits of a given register
-    pub async fn set_register_bits(&mut self, register: Register, bits: u8) -> Result<(), Error<E>> {
+    pub async fn set_register_bits(
+        &mut self,
+        register: Register,
+        bits: u8,
+    ) -> Result<(), Error<E>> {
         self.modify_register(register, |v| v | bits).await
     }
 
     /// Clears some bits of a given register
-    pub async fn clear_register_bits(&mut self, register: Register, bits: u8) -> Result<(), Error<E>> {
+    pub async fn clear_register_bits(
+        &mut self,
+        register: Register,
+        bits: u8,
+    ) -> Result<(), Error<E>> {
         self.modify_register(register, |v| v & !bits).await
     }
 }
@@ -87,9 +95,6 @@ impl Register {
 
     /// Checks if the register is read-only
     pub fn is_read_only(self) -> bool {
-        matches!(
-            self,
-            Register::Status
-        )
+        matches!(self, Register::Status)
     }
 }
