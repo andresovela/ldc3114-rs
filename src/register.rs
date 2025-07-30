@@ -67,32 +67,34 @@ impl Register {
 
     /// Checks if the register is read-only.
     pub fn is_read_only(self) -> bool {
-        matches!(self, Register::Status |
-            Register::Out |
-            Register::Data0Lsb |
-            Register::Data0Msb |
-            Register::Data1Lsb |
-            Register::Data1Msb |
-            Register::Data2Lsb |
-            Register::Data2Msb |
-            Register::Data3Lsb |
-            Register::Data3Msb |
-            Register::RawData0_1 |
-            Register::RawData0_2 |
-            Register::RawData0_3 |
-            Register::RawData1_1 |
-            Register::RawData1_2 |
-            Register::RawData1_3 |
-            Register::RawData2_1 |
-            Register::RawData2_2 |
-            Register::RawData2_3 |
-            Register::RawData3_1 |
-            Register::RawData3_2 |
-            Register::RawData3_3 |
-            Register::DeviceIdLsb |
-            Register::DeviceIdMsb |
-            Register::ManufacturerIdLsb |
-            Register::ManufacturerIdMsb
+        matches!(
+            self,
+            Register::Status
+                | Register::Out
+                | Register::Data0Lsb
+                | Register::Data0Msb
+                | Register::Data1Lsb
+                | Register::Data1Msb
+                | Register::Data2Lsb
+                | Register::Data2Msb
+                | Register::Data3Lsb
+                | Register::Data3Msb
+                | Register::RawData0_1
+                | Register::RawData0_2
+                | Register::RawData0_3
+                | Register::RawData1_1
+                | Register::RawData1_2
+                | Register::RawData1_3
+                | Register::RawData2_1
+                | Register::RawData2_2
+                | Register::RawData2_3
+                | Register::RawData3_1
+                | Register::RawData3_2
+                | Register::RawData3_3
+                | Register::DeviceIdLsb
+                | Register::DeviceIdMsb
+                | Register::ManufacturerIdLsb
+                | Register::ManufacturerIdMsb
         )
     }
 }

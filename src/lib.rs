@@ -24,7 +24,7 @@ where
 {
     /// Creates a new driver instance for the LDC3114.
     pub fn new(i2c: I2C) -> Self {
-        Self { 
+        Self {
             i2c,
             sency0: 4,
             sency1: 4,
@@ -42,7 +42,10 @@ where
     /// Reads the manufacturer ID.
     pub async fn read_manufacturer_id(&mut self) -> Result<u16, Error<E>> {
         let mut buffer = [0; 2];
-        self.i2c.write_read(I2C_ADDR, &[Register::ManufacturerIdLsb.addr()], &mut buffer).await.map_err(Error::I2c)?;
+        self.i2c
+            .write_read(I2C_ADDR, &[Register::ManufacturerIdLsb.addr()], &mut buffer)
+            .await
+            .map_err(Error::I2c)?;
 
         let data = u16::from_le_bytes(buffer);
         Ok(data)
@@ -79,7 +82,7 @@ where
     }
 
     /// Resets the device and register configurations.
-    /// 
+    ///
     /// All registers will be returned to default values.
     /// Normal operation will not resume until STATUS:CHIP_READY=1.
     pub async fn full_reset(&mut self) -> Result<(), Error<E>> {
@@ -87,7 +90,7 @@ where
     }
 
     /// Enter configuration mode.
-    /// 
+    ///
     /// Any device configuration changes should be made in this mode.
     pub async fn config_mode(&mut self) -> Result<(), Error<E>> {
         self.write_register(Register::Reset, CONFIG_MODE).await
@@ -116,24 +119,27 @@ where
 
         Ok(OutputLogicStates {
             new_data_available: (out & DATA_RDY != 0),
-            out0: (out & OUT0 != 0), 
-            out1: (out & OUT1 != 0), 
-            out2: (out & OUT2 != 0), 
-            out3: (out & OUT3 != 0), 
+            out0: (out & OUT0 != 0),
+            out1: (out & OUT1 != 0),
+            out2: (out & OUT2 != 0),
+            out3: (out & OUT3 != 0),
         })
     }
 
     /// Reads the button data for the given channel.
     pub async fn read_button_data(&mut self, ch: impl ChannelRegisters) -> Result<i16, Error<E>> {
         let mut buffer = [0; 2];
-        self.i2c.write_read(I2C_ADDR, &[ch.data_lsb() as u8], &mut buffer).await.map_err(Error::I2c)?;
+        self.i2c
+            .write_read(I2C_ADDR, &[ch.data_lsb() as u8], &mut buffer)
+            .await
+            .map_err(Error::I2c)?;
 
         let data = i16::from_le_bytes(buffer);
         Ok(data)
     }
 
     /// Reads the pre-processed raw sensor data for the given channel.
-    /// 
+    ///
     /// The value returned is given by the following formula:
     /// ```
     /// f_sensor = 30 * W * 44_000_000 / raw_data
@@ -145,19 +151,22 @@ where
     pub async fn read_raw_data<T: ChannelRegisters>(&mut self, ch: T) -> Result<u32, Error<E>> {
         let mut buffer = [0; 4];
         let slice = &mut buffer[0..=2];
-        self.i2c.write_read(I2C_ADDR, &[ch.raw_data_lsb() as u8], slice).await.map_err(Error::I2c)?;
+        self.i2c
+            .write_read(I2C_ADDR, &[ch.raw_data_lsb() as u8], slice)
+            .await
+            .map_err(Error::I2c)?;
 
         let data = u32::from_le_bytes(buffer);
         if data == 0 {
             return Ok(0);
         }
-        
+
         let sency = match T::CH {
             0 => self.sency0,
             1 => self.sency1,
             2 => self.sency2,
             3 => self.sency3,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         let w = 128 * (1 + sency as u32) * (2 << self.lcdiv as u32);
@@ -166,12 +175,15 @@ where
     }
 
     /// Sets up the entire device configuration.
-    pub async fn set_device_configuration(&mut self, config: &DeviceConfig) -> Result<(), Error<E>> {
+    pub async fn set_device_configuration(
+        &mut self,
+        config: &DeviceConfig,
+    ) -> Result<(), Error<E>> {
         fn en_bits<T: ChannelRegisters>(_ch: T, mode: ChannelMode) -> u8 {
             match mode {
                 ChannelMode::Disabled => 0x00,
                 ChannelMode::NormalMode => T::EN_BIT,
-                ChannelMode::NormalAndLowPowerMode => T::EN_BIT | T::LPEN_BIT
+                ChannelMode::NormalAndLowPowerMode => T::EN_BIT | T::LPEN_BIT,
             }
         }
 
@@ -193,7 +205,11 @@ where
             }
         }
 
-        fn opol_dpol_bits<T: ChannelRegisters>(_ch: T, opol: OutputPolarity, dpol: DataPolarity) -> u8 {
+        fn opol_dpol_bits<T: ChannelRegisters>(
+            _ch: T,
+            opol: OutputPolarity,
+            dpol: DataPolarity,
+        ) -> u8 {
             match (opol, dpol) {
                 (OutputPolarity::ActiveLow, DataPolarity::Inverted) => 0x00,
                 (OutputPolarity::ActiveHigh, DataPolarity::Inverted) => T::OPOL_BIT,
@@ -201,7 +217,7 @@ where
                 (OutputPolarity::ActiveHigh, DataPolarity::Normal) => T::OPOL_BIT | T::DPOL_BIT,
             }
         }
-        
+
         let mut en = en_bits(Channel0, config.ch0.mode);
         en |= en_bits(Channel1, config.ch1.mode);
         en |= en_bits(Channel2, config.ch2.mode);
@@ -214,7 +230,8 @@ where
         self.set_channel_gain(Channel3, config.ch3.gain).await?;
 
         self.set_normal_scan_rate(config.scan_rate).await?;
-        self.set_low_power_scan_rate(config.low_power_scan_rate).await?;
+        self.set_low_power_scan_rate(config.low_power_scan_rate)
+            .await?;
 
         let mut intpol = (config.enable_reset_of_button_baseline_tracking as u8) << 4;
         intpol |= (config.enable_button_press_detection_algorithm as u8) << 3;
@@ -223,29 +240,81 @@ where
         intpol |= (!config.enable_max_out_check) as u8;
         self.write_register(Register::IntPol, intpol).await?;
 
-        self.set_baseline_tracking_increment_np(config.baseline_tracking_increment_np).await?;
-        self.set_baseline_tracking_increment_lp(config.baseline_tracking_increment_lp).await?;
+        self.set_baseline_tracking_increment_np(config.baseline_tracking_increment_np)
+            .await?;
+        self.set_baseline_tracking_increment_lp(config.baseline_tracking_increment_lp)
+            .await?;
 
-        let mut btpause_maxwin = btpause_maxwin_bits(Channel0, config.ch0.baseline_tracking_pause, config.ch0.enable_max_win_button_algorithm);
-        btpause_maxwin |= btpause_maxwin_bits(Channel1, config.ch1.baseline_tracking_pause, config.ch1.enable_max_win_button_algorithm);
-        btpause_maxwin |= btpause_maxwin_bits(Channel2, config.ch2.baseline_tracking_pause, config.ch2.enable_max_win_button_algorithm);
-        btpause_maxwin |= btpause_maxwin_bits(Channel3, config.ch3.baseline_tracking_pause, config.ch3.enable_max_win_button_algorithm);
-        self.write_register(Register::BtPauseMaxWin, btpause_maxwin).await?;
+        let mut btpause_maxwin = btpause_maxwin_bits(
+            Channel0,
+            config.ch0.baseline_tracking_pause,
+            config.ch0.enable_max_win_button_algorithm,
+        );
+        btpause_maxwin |= btpause_maxwin_bits(
+            Channel1,
+            config.ch1.baseline_tracking_pause,
+            config.ch1.enable_max_win_button_algorithm,
+        );
+        btpause_maxwin |= btpause_maxwin_bits(
+            Channel2,
+            config.ch2.baseline_tracking_pause,
+            config.ch2.enable_max_win_button_algorithm,
+        );
+        btpause_maxwin |= btpause_maxwin_bits(
+            Channel3,
+            config.ch3.baseline_tracking_pause,
+            config.ch3.enable_max_win_button_algorithm,
+        );
+        self.write_register(Register::BtPauseMaxWin, btpause_maxwin)
+            .await?;
 
         self.set_lc_divider(config.lc_divider).await?;
         self.set_hysteresis(config.hysteresis).await?;
         self.set_antitwist(config.antitwist).await?;
 
-        let mut common_deform = common_deform_bits(Channel0, config.ch0.enable_anticommon_algorithm, config.ch0.enable_antideform_algorithm);
-        common_deform |= common_deform_bits(Channel1, config.ch1.enable_anticommon_algorithm, config.ch1.enable_antideform_algorithm);
-        common_deform |= common_deform_bits(Channel2, config.ch2.enable_anticommon_algorithm, config.ch2.enable_antideform_algorithm);
-        common_deform |= common_deform_bits(Channel3, config.ch3.enable_anticommon_algorithm, config.ch3.enable_antideform_algorithm);
-        self.write_register(Register::CommonDeform, common_deform).await?;
+        let mut common_deform = common_deform_bits(
+            Channel0,
+            config.ch0.enable_anticommon_algorithm,
+            config.ch0.enable_antideform_algorithm,
+        );
+        common_deform |= common_deform_bits(
+            Channel1,
+            config.ch1.enable_anticommon_algorithm,
+            config.ch1.enable_antideform_algorithm,
+        );
+        common_deform |= common_deform_bits(
+            Channel2,
+            config.ch2.enable_anticommon_algorithm,
+            config.ch2.enable_antideform_algorithm,
+        );
+        common_deform |= common_deform_bits(
+            Channel3,
+            config.ch3.enable_anticommon_algorithm,
+            config.ch3.enable_antideform_algorithm,
+        );
+        self.write_register(Register::CommonDeform, common_deform)
+            .await?;
 
-        let mut opol_dpol = opol_dpol_bits(Channel0, config.ch0.output_polarity, config.ch0.data_polarity);
-        opol_dpol |= opol_dpol_bits(Channel1, config.ch1.output_polarity, config.ch1.data_polarity);
-        opol_dpol |= opol_dpol_bits(Channel2, config.ch2.output_polarity, config.ch2.data_polarity);
-        opol_dpol |= opol_dpol_bits(Channel3, config.ch3.output_polarity, config.ch3.data_polarity);
+        let mut opol_dpol = opol_dpol_bits(
+            Channel0,
+            config.ch0.output_polarity,
+            config.ch0.data_polarity,
+        );
+        opol_dpol |= opol_dpol_bits(
+            Channel1,
+            config.ch1.output_polarity,
+            config.ch1.data_polarity,
+        );
+        opol_dpol |= opol_dpol_bits(
+            Channel2,
+            config.ch2.output_polarity,
+            config.ch2.data_polarity,
+        );
+        opol_dpol |= opol_dpol_bits(
+            Channel3,
+            config.ch3.output_polarity,
+            config.ch3.data_polarity,
+        );
         self.write_register(Register::OpolDpol, opol_dpol).await?;
 
         let mut cntsc = (config.ch3.counter_scale as u8) << 6;
@@ -254,13 +323,19 @@ where
         cntsc |= config.ch1.counter_scale as u8;
         self.write_register(Register::Cntsc, cntsc).await?;
 
-        self.set_sensor_config(Channel0, &config.ch0.sensor_config).await?;
-        self.set_sensor_config(Channel1, &config.ch1.sensor_config).await?;
-        self.set_sensor_config(Channel2, &config.ch2.sensor_config).await?;
-        self.set_sensor_config(Channel3, &config.ch3.sensor_config).await?;
+        self.set_sensor_config(Channel0, &config.ch0.sensor_config)
+            .await?;
+        self.set_sensor_config(Channel1, &config.ch1.sensor_config)
+            .await?;
+        self.set_sensor_config(Channel2, &config.ch2.sensor_config)
+            .await?;
+        self.set_sensor_config(Channel3, &config.ch3.sensor_config)
+            .await?;
 
-        self.set_fast_tracking_factor(Channel0, config.ch0.fast_tracking_factor).await?;
-        self.set_fast_tracking_factor(Channel3, config.ch3.fast_tracking_factor).await?;
+        self.set_fast_tracking_factor(Channel0, config.ch0.fast_tracking_factor)
+            .await?;
+        self.set_fast_tracking_factor(Channel3, config.ch3.fast_tracking_factor)
+            .await?;
 
         let mut ftf1_2 = (config.ch2.fast_tracking_factor as u8) << 6;
         ftf1_2 |= (config.ch1.fast_tracking_factor as u8) << 4;
@@ -270,23 +345,36 @@ where
     }
 
     /// Configures a given channel.
-    pub async fn configure_channel<T: ChannelRegisters>(&mut self, ch: T, config: &ChannelConfig) -> Result<(), Error<E>> {
+    pub async fn configure_channel<T: ChannelRegisters>(
+        &mut self,
+        ch: T,
+        config: &ChannelConfig,
+    ) -> Result<(), Error<E>> {
         self.set_channel_mode(ch, config.mode).await?;
         self.set_channel_gain(ch, config.gain).await?;
         self.set_output_polarity(ch, config.output_polarity).await?;
         self.set_counter_scale(ch, config.counter_scale).await?;
-        self.set_fast_tracking_factor(ch, config.fast_tracking_factor).await?;
+        self.set_fast_tracking_factor(ch, config.fast_tracking_factor)
+            .await?;
         self.set_data_polarity(ch, config.data_polarity).await?;
         self.set_sensor_config(ch, &config.sensor_config).await?;
-        self.include_channel_in_max_win_algorithm(ch, config.enable_max_win_button_algorithm).await?;
-        self.include_channel_in_anticommon_algorithm(ch, config.enable_anticommon_algorithm).await?;
-        self.include_channel_in_antideform_algorithm(ch, config.enable_antideform_algorithm).await?;
-        self.set_baseline_tracking_pause(ch, config.baseline_tracking_pause).await?;
+        self.include_channel_in_max_win_algorithm(ch, config.enable_max_win_button_algorithm)
+            .await?;
+        self.include_channel_in_anticommon_algorithm(ch, config.enable_anticommon_algorithm)
+            .await?;
+        self.include_channel_in_antideform_algorithm(ch, config.enable_antideform_algorithm)
+            .await?;
+        self.set_baseline_tracking_pause(ch, config.baseline_tracking_pause)
+            .await?;
         Ok(())
     }
 
     /// Sets the operating mode for the given channel.
-    pub async fn set_channel_mode<T: ChannelRegisters>(&mut self, _ch: T, mode: ChannelMode) -> Result<(), Error<E>> {
+    pub async fn set_channel_mode<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        mode: ChannelMode,
+    ) -> Result<(), Error<E>> {
         match mode {
             ChannelMode::Disabled => {
                 let bits = T::EN_BIT | T::LPEN_BIT;
@@ -297,7 +385,8 @@ where
                     v &= !T::LPEN_BIT;
                     v |= T::EN_BIT;
                     v
-                }).await
+                })
+                .await
             }
             ChannelMode::NormalAndLowPowerMode => {
                 let bits = T::EN_BIT | T::LPEN_BIT;
@@ -307,7 +396,11 @@ where
     }
 
     /// Sets the gain for the given channel.
-    pub async fn set_channel_gain<T: ChannelRegisters>(&mut self, ch: T, gain: u8) -> Result<(), Error<E>> {
+    pub async fn set_channel_gain<T: ChannelRegisters>(
+        &mut self,
+        ch: T,
+        gain: u8,
+    ) -> Result<(), Error<E>> {
         if gain >= 0x40 {
             return Err(Error::InvalidParameter);
         }
@@ -344,19 +437,23 @@ where
     }
 
     /// Sets the interrupt polarity of pin INTB.
-    pub async fn set_interrupt_polarity(&mut self, polarity: InterruptPolarity) -> Result<(), Error<E>> {
+    pub async fn set_interrupt_polarity(
+        &mut self,
+        polarity: InterruptPolarity,
+    ) -> Result<(), Error<E>> {
         match polarity {
             InterruptPolarity::ActiveLow => {
                 self.clear_register_bits(Register::IntPol, INTPOL).await
             }
-            InterruptPolarity::ActiveHigh => {
-                self.set_register_bits(Register::IntPol, INTPOL).await
-            }
+            InterruptPolarity::ActiveHigh => self.set_register_bits(Register::IntPol, INTPOL).await,
         }
     }
 
     /// Enables/disables the button press detection algorithm to assert events on OUT_X pins.
-    pub async fn enable_button_press_detection_algorithm(&mut self, enable: bool) -> Result<(), Error<E>> {
+    pub async fn enable_button_press_detection_algorithm(
+        &mut self,
+        enable: bool,
+    ) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, BTN_ALG_EN).await
         } else {
@@ -365,7 +462,10 @@ where
     }
 
     /// Enables/disables reset of button algorithm baseline tracking value.
-    pub async fn enable_reset_of_button_baseline_tracking(&mut self, enable: bool) -> Result<(), Error<E>> {
+    pub async fn enable_reset_of_button_baseline_tracking(
+        &mut self,
+        enable: bool,
+    ) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, BTSRT_EN).await
         } else {
@@ -391,21 +491,33 @@ where
 
     /// Configures baseline tracking to pause or not for the given channel
     /// when its corresponding OUT pin is asserted.
-    pub async fn set_baseline_tracking_pause<T: ChannelRegisters>(&mut self, _ch: T, pause: bool) -> Result<(), Error<E>> {
+    pub async fn set_baseline_tracking_pause<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        pause: bool,
+    ) -> Result<(), Error<E>> {
         if pause {
-            self.set_register_bits(Register::BtPauseMaxWin, T::BTPAUSE_BIT).await
+            self.set_register_bits(Register::BtPauseMaxWin, T::BTPAUSE_BIT)
+                .await
         } else {
-            self.clear_register_bits(Register::BtPauseMaxWin, T::BTPAUSE_BIT).await
+            self.clear_register_bits(Register::BtPauseMaxWin, T::BTPAUSE_BIT)
+                .await
         }
     }
 
     /// Configures whether to include or exclude the given channel
     /// from the Max-Win Button algorithm.
-    pub async fn include_channel_in_max_win_algorithm<T:ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
+    pub async fn include_channel_in_max_win_algorithm<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        include: bool,
+    ) -> Result<(), Error<E>> {
         if include {
-            self.set_register_bits(Register::BtPauseMaxWin, T::MAXWIN_BIT).await
+            self.set_register_bits(Register::BtPauseMaxWin, T::MAXWIN_BIT)
+                .await
         } else {
-            self.clear_register_bits(Register::BtPauseMaxWin, T::MAXWIN_BIT).await
+            self.clear_register_bits(Register::BtPauseMaxWin, T::MAXWIN_BIT)
+                .await
         }
     }
 
@@ -435,58 +547,91 @@ where
 
     /// Configures whether to include or exclude the given channel
     /// from the Anti-Common Button algorithm.
-    pub async fn include_channel_in_anticommon_algorithm<T: ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
+    pub async fn include_channel_in_anticommon_algorithm<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        include: bool,
+    ) -> Result<(), Error<E>> {
         if include {
-            self.set_register_bits(Register::CommonDeform, T::ANTICOM_BIT).await
+            self.set_register_bits(Register::CommonDeform, T::ANTICOM_BIT)
+                .await
         } else {
-            self.clear_register_bits(Register::CommonDeform, T::ANTICOM_BIT).await
+            self.clear_register_bits(Register::CommonDeform, T::ANTICOM_BIT)
+                .await
         }
     }
 
     /// Configures whether to include or exclude the given channel
     /// from the Anti-Deform Button algorithm.
-    pub async fn include_channel_in_antideform_algorithm<T: ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
+    pub async fn include_channel_in_antideform_algorithm<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        include: bool,
+    ) -> Result<(), Error<E>> {
         if include {
-            self.set_register_bits(Register::CommonDeform, T::ANTIDFORM_BIT).await
+            self.set_register_bits(Register::CommonDeform, T::ANTIDFORM_BIT)
+                .await
         } else {
-            self.clear_register_bits(Register::CommonDeform, T::ANTIDFORM_BIT).await
+            self.clear_register_bits(Register::CommonDeform, T::ANTIDFORM_BIT)
+                .await
         }
     }
 
     /// Sets the output polarity of the given channel.
-    pub async fn set_output_polarity<T: ChannelRegisters>(&mut self, _ch: T, polarity: OutputPolarity) -> Result<(), Error<E>> {
+    pub async fn set_output_polarity<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        polarity: OutputPolarity,
+    ) -> Result<(), Error<E>> {
         match polarity {
             OutputPolarity::ActiveLow => {
-                self.clear_register_bits(Register::OpolDpol, T::OPOL_BIT).await
+                self.clear_register_bits(Register::OpolDpol, T::OPOL_BIT)
+                    .await
             }
             OutputPolarity::ActiveHigh => {
-                self.set_register_bits(Register::OpolDpol, T::OPOL_BIT).await
+                self.set_register_bits(Register::OpolDpol, T::OPOL_BIT)
+                    .await
             }
         }
     }
 
     /// Sets the data polarity of the given channel.
-    pub async fn set_data_polarity<T: ChannelRegisters>(&mut self, _ch: T, polarity: DataPolarity) -> Result<(), Error<E>> {
+    pub async fn set_data_polarity<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        polarity: DataPolarity,
+    ) -> Result<(), Error<E>> {
         match polarity {
             DataPolarity::Inverted => {
-                self.clear_register_bits(Register::OpolDpol, T::DPOL_BIT).await
+                self.clear_register_bits(Register::OpolDpol, T::DPOL_BIT)
+                    .await
             }
             DataPolarity::Normal => {
-                self.set_register_bits(Register::OpolDpol, T::DPOL_BIT).await
+                self.set_register_bits(Register::OpolDpol, T::DPOL_BIT)
+                    .await
             }
         }
     }
 
     /// Sets the counter scale for the given channel.
-    pub async fn set_counter_scale<T: ChannelRegisters>(&mut self, _ch: T, scale: CounterScale) -> Result<(), Error<E>> {
+    pub async fn set_counter_scale<T: ChannelRegisters>(
+        &mut self,
+        _ch: T,
+        scale: CounterScale,
+    ) -> Result<(), Error<E>> {
         self.modify_register(Register::Cntsc, |mut v| {
             v &= !T::CNTSC_MASK;
             v | (scale as u8) << T::CNTSC_OFFSET
-        }).await
+        })
+        .await
     }
 
     /// Sets the sensor configuration for the given channel.
-    pub async fn set_sensor_config<T: ChannelRegisters>(&mut self, ch: T, config: &SensorConfig) -> Result<(), Error<E>> {
+    pub async fn set_sensor_config<T: ChannelRegisters>(
+        &mut self,
+        ch: T,
+        config: &SensorConfig,
+    ) -> Result<(), Error<E>> {
         if config.cycle_count >= 0x20 {
             return Err(Error::InvalidParameter);
         }
@@ -499,11 +644,16 @@ where
     }
 
     /// Sets the Fast Tracking Factor (FTF) for the given channel.
-    pub async fn set_fast_tracking_factor<T: ChannelRegisters>(&mut self, ch: T, ftf: FastTrackingFactor) -> Result<(), Error<E>> {
+    pub async fn set_fast_tracking_factor<T: ChannelRegisters>(
+        &mut self,
+        ch: T,
+        ftf: FastTrackingFactor,
+    ) -> Result<(), Error<E>> {
         self.modify_register(ch.ftf(), |mut v| {
             v &= !T::FTF_MASK;
             v | (ftf as u8) << T::FTF_OFFSET
-        }).await
+        })
+        .await
     }
 
     /// Writes a value to a given register.
@@ -756,7 +906,7 @@ impl SensorConfig {
 
 /// Fast Tracking Factor for button algorithm.
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))] 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum FastTrackingFactor {
