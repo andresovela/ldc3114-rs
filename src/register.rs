@@ -1,6 +1,6 @@
 use crate::ChannelMode;
 
-/// LDC3114 registers
+/// LDC3114 registers.
 #[derive(Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
@@ -60,12 +60,12 @@ pub enum Register {
 }
 
 impl Register {
-    /// Get the address of the register
+    /// Get the address of the register.
     pub fn addr(self) -> u8 {
         self as u8
     }
 
-    /// Checks if the register is read-only
+    /// Checks if the register is read-only.
     pub fn is_read_only(self) -> bool {
         matches!(self, Register::Status |
             Register::Out |
@@ -189,63 +189,64 @@ pub(crate) const FTF1_OFFSET: u8 = 4;
 pub(crate) const FTF3_MASK: u8 = 0x03;
 pub(crate) const FTF3_OFFSET: u8 = 0;
 
-/// Channel registers
+/// Channel registers.
 pub trait ChannelRegisters: Copy {
+    /// Channel number.
     const CH: u8;
-    /// EN bit in the EN register
+    /// EN bit in the EN register.
     const EN_BIT: u8;
-    /// LP_EN bit in the EN register
+    /// LP_EN bit in the EN register.
     const LPEN_BIT: u8;
-    /// BTPAUSE bit in the BTPAUSE_MAXWIN register
+    /// BTPAUSE bit in the BTPAUSE_MAXWIN register.
     const BTPAUSE_BIT: u8;
-    /// MAXWIN bit in the BTPAUSE_MAXWIN register
+    /// MAXWIN bit in the BTPAUSE_MAXWIN register.
     const MAXWIN_BIT: u8;
-    /// OPOL bit in the OPOL_DPOL register
+    /// OPOL bit in the OPOL_DPOL register.
     const OPOL_BIT: u8;
-    /// DPOL bit in the OPOL_DPOL register
+    /// DPOL bit in the OPOL_DPOL register.
     const DPOL_BIT: u8;
-    /// ANTICOM bit in the COMMON_DEFORM register
+    /// ANTICOM bit in the COMMON_DEFORM register.
     const ANTICOM_BIT: u8;
-    /// ANTIDFORM bit in the COMMON_DEFORM register
+    /// ANTIDFORM bit in the COMMON_DEFORM register.
     const ANTIDFORM_BIT: u8;
-    /// Mask for the CNTSC bits in the CNTSC register
+    /// Mask for the CNTSC bits in the CNTSC register.
     const CNTSC_MASK: u8;
-    /// Offset to the CNTSC bits in the CNTSC register
+    /// Offset to the CNTSC bits in the CNTSC register.
     const CNTSC_OFFSET: u8;
-    /// Mask for the FTF bits in the FTF register for this channel
+    /// Mask for the FTF bits in the FTF register for this channel.
     const FTF_MASK: u8;
-    /// Offset to the FTF bits in the FTF register for this channel
+    /// Offset to the FTF bits in the FTF register for this channel.
     const FTF_OFFSET: u8;
-    /// Default mode
+    /// Default mode.
     const DEFAULT_MODE: super::ChannelMode;
-    /// Get the DATA_LSB register for this channel
+    /// Get the DATA_LSB register for this channel.
     fn data_lsb(&self) -> Register;
-    /// Get the RAW_DATA_LSB register for this channel
+    /// Get the RAW_DATA_LSB register for this channel.
     fn raw_data_lsb(&self) -> Register;
-    /// Get the GAIN register for this channel
+    /// Get the GAIN register for this channel.
     fn gain(&self) -> Register;
-    /// Get the SENSOR_CONFIG register for this channel
+    /// Get the SENSOR_CONFIG register for this channel.
     fn sensor_config(&self) -> Register;
-    /// Get the FTF register for this channel
+    /// Get the FTF register for this channel.
     fn ftf(&self) -> Register;
 }
 
-/// Representation of registers for channel 0
+/// Representation of registers for channel 0.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel0;
 
-/// Representation of registers for channel 1
+/// Representation of registers for channel 1.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel1;
 
-/// Representation of registers for channel 2
+/// Representation of registers for channel 2.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel2;
 
-/// Representation of registers for channel 3
+/// Representation of registers for channel 3.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel3;
@@ -286,7 +287,7 @@ macro_rules! impl_channel_registers {
     };
 }
 
-impl_channel_registers!(Channel0: 0, Data0Lsb, RawData0_3, Gain0, Sensor0Config, Ftf0, EN0, LPEN0, BTPAUSE0, MAXWIN0, OPOL0, DPOL0, ANTICOM0, ANTIDFORM0, CNTSC0_MASK, CNTSC0_OFFSET, FTF0_MASK, FTF0_OFFSET, LowPowerMode);
+impl_channel_registers!(Channel0: 0, Data0Lsb, RawData0_3, Gain0, Sensor0Config, Ftf0, EN0, LPEN0, BTPAUSE0, MAXWIN0, OPOL0, DPOL0, ANTICOM0, ANTIDFORM0, CNTSC0_MASK, CNTSC0_OFFSET, FTF0_MASK, FTF0_OFFSET, NormalAndLowPowerMode);
 impl_channel_registers!(Channel1: 1, Data1Lsb, RawData1_3, Gain1, Sensor1Config, Ftf1_2, EN1, LPEN1, BTPAUSE1, MAXWIN1, OPOL1, DPOL1, ANTICOM1, ANTIDFORM1, CNTSC1_MASK, CNTSC1_OFFSET, FTF1_MASK, FTF1_OFFSET, NormalMode);
 impl_channel_registers!(Channel2: 2, Data2Lsb, RawData2_3, Gain2, Sensor2Config, Ftf1_2, EN2, LPEN2, BTPAUSE2, MAXWIN2, OPOL2, DPOL2, ANTICOM2, ANTIDFORM2, CNTSC2_MASK, CNTSC2_OFFSET, FTF2_MASK, FTF2_OFFSET, NormalMode);
 impl_channel_registers!(Channel3: 3, Data3Lsb, RawData3_3, Gain3, Sensor3Config, Ftf3, EN3, LPEN3, BTPAUSE3, MAXWIN3, OPOL3, DPOL3, ANTICOM3, ANTIDFORM3, CNTSC3_MASK, CNTSC3_OFFSET, FTF3_MASK, FTF3_OFFSET, NormalMode);

@@ -1,13 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
+#![deny(missing_docs)]
 
 mod register;
 pub use register::*;
 
-/// LDC3114 has a fixed I2C address of 0x2A
+/// LDC3114 has a fixed I2C address of 0x2A.
 const I2C_ADDR: u8 = 0x2A;
 
-/// Driver for the LDC3114
+/// Driver for the LDC3114.
 pub struct Ldc3114<I2C> {
     i2c: I2C,
     sency0: u8,
@@ -21,7 +22,7 @@ impl<I2C, E> Ldc3114<I2C>
 where
     I2C: embedded_hal_async::i2c::I2c + embedded_hal::i2c::ErrorType<Error = E>,
 {
-    /// Creates a new driver instance for the LDC3114
+    /// Creates a new driver instance for the LDC3114.
     pub fn new(i2c: I2C) -> Self {
         Self { 
             i2c,
@@ -33,12 +34,12 @@ where
         }
     }
 
-    /// Reads the device ID
+    /// Reads the device ID.
     pub async fn read_device_id(&mut self) -> Result<u8, Error<E>> {
         self.read_register(Register::DeviceIdMsb).await
     }
 
-    /// Reads the manufacturer ID
+    /// Reads the manufacturer ID.
     pub async fn read_manufacturer_id(&mut self) -> Result<u16, Error<E>> {
         let mut buffer = [0; 2];
         self.i2c.write_read(I2C_ADDR, &[Register::ManufacturerIdLsb.addr()], &mut buffer).await.map_err(Error::I2c)?;
@@ -47,7 +48,7 @@ where
         Ok(data)
     }
 
-    /// Reads the status register
+    /// Reads the status register.
     pub async fn read_status(&mut self) -> Result<Status, Error<E>> {
         let sr = self.read_register(Register::Status).await?;
 
@@ -63,36 +64,36 @@ where
         })
     }
 
-    /// Checks if the registers are ready to be written
+    /// Checks if the registers are ready to be written.
     pub async fn is_ready_to_write(&mut self) -> Result<bool, Error<E>> {
         let sr = self.read_register(Register::Status).await?;
         let is_ready = (sr & RDY_TO_WRITE) != 0;
         Ok(is_ready)
     }
 
-    /// Checks if the chip is ready after internal reset
+    /// Checks if the chip is ready after internal reset.
     pub async fn is_chip_ready(&mut self) -> Result<bool, Error<E>> {
         let sr = self.read_register(Register::Status).await?;
         let is_ready = (sr & CHIP_READY) != 0;
         Ok(is_ready)
     }
 
-    /// Resets the device and register configurations
+    /// Resets the device and register configurations.
     /// 
-    /// All registers will be returned to default values
-    /// Normal operation will not resume until STATUS:CHIP_READY=1
+    /// All registers will be returned to default values.
+    /// Normal operation will not resume until STATUS:CHIP_READY=1.
     pub async fn full_reset(&mut self) -> Result<(), Error<E>> {
         self.write_register(Register::Reset, FULL_RESET).await
     }
 
-    /// Enter configuration mode
+    /// Enter configuration mode.
     /// 
-    /// Any device configuration changes should be made in this mode
+    /// Any device configuration changes should be made in this mode.
     pub async fn config_mode(&mut self) -> Result<(), Error<E>> {
         self.write_register(Register::Reset, CONFIG_MODE).await
     }
 
-    /// Enter normal mode (exit configuration mode)
+    /// Enter normal mode (exit configuration mode).
     pub async fn normal_mode(&mut self) -> Result<(), Error<E>> {
         let lcdiv = self.read_register(Register::LcDivider).await?;
         let scfg0 = self.read_register(Register::Sensor0Config).await?;
@@ -109,7 +110,7 @@ where
         self.write_register(Register::Reset, 0).await
     }
 
-    /// Reads the channel output logic states
+    /// Reads the channel output logic states.
     pub async fn read_output_logic_states(&mut self) -> Result<OutputLogicStates, Error<E>> {
         let out = self.read_register(Register::Out).await?;
 
@@ -122,7 +123,7 @@ where
         })
     }
 
-    /// Reads the button data for the given channel
+    /// Reads the button data for the given channel.
     pub async fn read_button_data(&mut self, ch: impl ChannelRegisters) -> Result<i16, Error<E>> {
         let mut buffer = [0; 2];
         self.i2c.write_read(I2C_ADDR, &[ch.data_lsb() as u8], &mut buffer).await.map_err(Error::I2c)?;
@@ -131,7 +132,7 @@ where
         Ok(data)
     }
 
-    /// Reads the pre-processed raw sensor data for the given channel
+    /// Reads the pre-processed raw sensor data for the given channel.
     /// 
     /// The value returned is given by the following formula:
     /// ```
@@ -164,13 +165,13 @@ where
         Ok(fsensor as u32)
     }
 
-    /// Sets up the entire device configuration
+    /// Sets up the entire device configuration.
     pub async fn set_device_configuration(&mut self, config: &DeviceConfig) -> Result<(), Error<E>> {
         fn en_bits<T: ChannelRegisters>(_ch: T, mode: ChannelMode) -> u8 {
             match mode {
                 ChannelMode::Disabled => 0x00,
                 ChannelMode::NormalMode => T::EN_BIT,
-                ChannelMode::LowPowerMode => T::EN_BIT | T::LPEN_BIT
+                ChannelMode::NormalAndLowPowerMode => T::EN_BIT | T::LPEN_BIT
             }
         }
 
@@ -268,7 +269,7 @@ where
         Ok(())
     }
 
-    /// Configures a given channel
+    /// Configures a given channel.
     pub async fn configure_channel<T: ChannelRegisters>(&mut self, ch: T, config: &ChannelConfig) -> Result<(), Error<E>> {
         self.set_channel_mode(ch, config.mode).await?;
         self.set_channel_gain(ch, config.gain).await?;
@@ -284,7 +285,7 @@ where
         Ok(())
     }
 
-    /// Sets the operating mode for the given channel
+    /// Sets the operating mode for the given channel.
     pub async fn set_channel_mode<T: ChannelRegisters>(&mut self, _ch: T, mode: ChannelMode) -> Result<(), Error<E>> {
         match mode {
             ChannelMode::Disabled => {
@@ -298,14 +299,14 @@ where
                     v
                 }).await
             }
-            ChannelMode::LowPowerMode => {
+            ChannelMode::NormalAndLowPowerMode => {
                 let bits = T::EN_BIT | T::LPEN_BIT;
                 self.set_register_bits(Register::En, bits).await
             }
         }
     }
 
-    /// Sets the gain for the given channel
+    /// Sets the gain for the given channel.
     pub async fn set_channel_gain<T: ChannelRegisters>(&mut self, ch: T, gain: u8) -> Result<(), Error<E>> {
         if gain >= 0x40 {
             return Err(Error::InvalidParameter);
@@ -313,18 +314,18 @@ where
         self.write_register(ch.gain(), gain).await
     }
 
-    /// Sets the scan rate in normal power mode
+    /// Sets the scan rate in normal power mode.
     pub async fn set_normal_scan_rate(&mut self, sr: ScanRate) -> Result<(), Error<E>> {
         self.write_register(Register::NpScanRate, sr as u8).await
     }
 
-    /// Sets the scan rate in low power mode
+    /// Sets the scan rate in low power mode.
     pub async fn set_low_power_scan_rate(&mut self, sr: LowPowerScanRate) -> Result<(), Error<E>> {
         self.write_register(Register::LpScanRate, sr as u8).await
     }
 
     /// Enables/disables setting MAXOUT bit if button algorithm generates codes
-    /// outside maximum range
+    /// outside maximum range.
     pub async fn enable_maxout_check(&mut self, enable: bool) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, DIS_BTB_MO).await
@@ -333,7 +334,7 @@ where
         }
     }
 
-    /// Enables/disables button timeout if button is pressed for more than 50 seconds
+    /// Enables/disables button timeout if button is pressed for more than 50 seconds.
     pub async fn enable_button_timeout(&mut self, enable: bool) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, DIS_BTN_TO).await
@@ -342,7 +343,7 @@ where
         }
     }
 
-    /// Sets the interrupt polarity of pin INTB
+    /// Sets the interrupt polarity of pin INTB.
     pub async fn set_interrupt_polarity(&mut self, polarity: InterruptPolarity) -> Result<(), Error<E>> {
         match polarity {
             InterruptPolarity::ActiveLow => {
@@ -354,7 +355,7 @@ where
         }
     }
 
-    /// Enables/disables the button press detection algorithm to assert events on OUT_X pins
+    /// Enables/disables the button press detection algorithm to assert events on OUT_X pins.
     pub async fn enable_button_press_detection_algorithm(&mut self, enable: bool) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, BTN_ALG_EN).await
@@ -363,7 +364,7 @@ where
         }
     }
 
-    /// Enables/disables reset of button algorithm baseline tracking value
+    /// Enables/disables reset of button algorithm baseline tracking value.
     pub async fn enable_reset_of_button_baseline_tracking(&mut self, enable: bool) -> Result<(), Error<E>> {
         if enable {
             self.set_register_bits(Register::IntPol, BTSRT_EN).await
@@ -372,7 +373,7 @@ where
         }
     }
 
-    /// Sets the baseline tracking increment in normal power mode
+    /// Sets the baseline tracking increment in normal power mode.
     pub async fn set_baseline_tracking_increment_np(&mut self, value: u8) -> Result<(), Error<E>> {
         if value >= 0x08 {
             return Err(Error::InvalidParameter);
@@ -380,7 +381,7 @@ where
         self.write_register(Register::NpBaseInc, value).await
     }
 
-    /// Sets the baseline tracking increment in low power mode
+    /// Sets the baseline tracking increment in low power mode.
     pub async fn set_baseline_tracking_increment_lp(&mut self, value: u8) -> Result<(), Error<E>> {
         if value >= 0x08 {
             return Err(Error::InvalidParameter);
@@ -389,7 +390,7 @@ where
     }
 
     /// Configures baseline tracking to pause or not for the given channel
-    /// when its corresponding OUT pin is asserted
+    /// when its corresponding OUT pin is asserted.
     pub async fn set_baseline_tracking_pause<T: ChannelRegisters>(&mut self, _ch: T, pause: bool) -> Result<(), Error<E>> {
         if pause {
             self.set_register_bits(Register::BtPauseMaxWin, T::BTPAUSE_BIT).await
@@ -399,7 +400,7 @@ where
     }
 
     /// Configures whether to include or exclude the given channel
-    /// from the Max-Win Button algorithm
+    /// from the Max-Win Button algorithm.
     pub async fn include_channel_in_max_win_algorithm<T:ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
         if include {
             self.set_register_bits(Register::BtPauseMaxWin, T::MAXWIN_BIT).await
@@ -408,7 +409,7 @@ where
         }
     }
 
-    /// Sets the LC oscillation frequency divider
+    /// Sets the LC oscillation frequency divider.
     pub async fn set_lc_divider(&mut self, value: u8) -> Result<(), Error<E>> {
         if value >= 0x08 {
             return Err(Error::InvalidParameter);
@@ -416,7 +417,7 @@ where
         self.write_register(Register::LcDivider, value).await
     }
 
-    /// Hysteresis for threshold for button algorithm
+    /// Hysteresis for threshold for button algorithm.
     pub async fn set_hysteresis(&mut self, value: u8) -> Result<(), Error<E>> {
         if value >= 0x10 {
             return Err(Error::InvalidParameter);
@@ -424,7 +425,7 @@ where
         self.write_register(Register::Hyst, value).await
     }
 
-    /// Sets the anti-twist threshold value for the anti-twist button algorithm
+    /// Sets the anti-twist threshold value for the anti-twist button algorithm.
     pub async fn set_antitwist(&mut self, value: u8) -> Result<(), Error<E>> {
         if value >= 0x08 {
             return Err(Error::InvalidParameter);
@@ -433,7 +434,7 @@ where
     }
 
     /// Configures whether to include or exclude the given channel
-    /// from the Anti-Common Button algorithm
+    /// from the Anti-Common Button algorithm.
     pub async fn include_channel_in_anticommon_algorithm<T: ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
         if include {
             self.set_register_bits(Register::CommonDeform, T::ANTICOM_BIT).await
@@ -443,7 +444,7 @@ where
     }
 
     /// Configures whether to include or exclude the given channel
-    /// from the Anti-Deform Button algorithm
+    /// from the Anti-Deform Button algorithm.
     pub async fn include_channel_in_antideform_algorithm<T: ChannelRegisters>(&mut self, _ch: T, include: bool) -> Result<(), Error<E>> {
         if include {
             self.set_register_bits(Register::CommonDeform, T::ANTIDFORM_BIT).await
@@ -452,7 +453,7 @@ where
         }
     }
 
-    /// Sets the output polarity of the given channel
+    /// Sets the output polarity of the given channel.
     pub async fn set_output_polarity<T: ChannelRegisters>(&mut self, _ch: T, polarity: OutputPolarity) -> Result<(), Error<E>> {
         match polarity {
             OutputPolarity::ActiveLow => {
@@ -464,7 +465,7 @@ where
         }
     }
 
-    /// Sets the data polarity of the given channel
+    /// Sets the data polarity of the given channel.
     pub async fn set_data_polarity<T: ChannelRegisters>(&mut self, _ch: T, polarity: DataPolarity) -> Result<(), Error<E>> {
         match polarity {
             DataPolarity::Inverted => {
@@ -476,7 +477,7 @@ where
         }
     }
 
-    /// Sets the counter scale for the given channel
+    /// Sets the counter scale for the given channel.
     pub async fn set_counter_scale<T: ChannelRegisters>(&mut self, _ch: T, scale: CounterScale) -> Result<(), Error<E>> {
         self.modify_register(Register::Cntsc, |mut v| {
             v &= !T::CNTSC_MASK;
@@ -484,7 +485,7 @@ where
         }).await
     }
 
-    /// Sets the sensor configuration for the given channel
+    /// Sets the sensor configuration for the given channel.
     pub async fn set_sensor_config<T: ChannelRegisters>(&mut self, ch: T, config: &SensorConfig) -> Result<(), Error<E>> {
         if config.cycle_count >= 0x20 {
             return Err(Error::InvalidParameter);
@@ -497,7 +498,7 @@ where
         self.write_register(ch.sensor_config(), value).await
     }
 
-    /// Sets the Fast Tracking Factor (FTF) for the given channel
+    /// Sets the Fast Tracking Factor (FTF) for the given channel.
     pub async fn set_fast_tracking_factor<T: ChannelRegisters>(&mut self, ch: T, ftf: FastTrackingFactor) -> Result<(), Error<E>> {
         self.modify_register(ch.ftf(), |mut v| {
             v &= !T::FTF_MASK;
@@ -505,7 +506,7 @@ where
         }).await
     }
 
-    /// Writes a value to a given register
+    /// Writes a value to a given register.
     pub async fn write_register(&mut self, register: Register, value: u8) -> Result<(), Error<E>> {
         if register.is_read_only() {
             return Err(Error::WriteToReadOnly);
@@ -518,7 +519,7 @@ where
         Ok(())
     }
 
-    /// Reads a value from a given register
+    /// Reads a value from a given register.
     pub async fn read_register(&mut self, register: Register) -> Result<u8, Error<E>> {
         let mut buffer = [0u8; 1];
         self.i2c
@@ -528,7 +529,7 @@ where
         Ok(buffer[0])
     }
 
-    /// Modifies the value of a given register
+    /// Modifies the value of a given register.
     pub async fn modify_register<F>(&mut self, register: Register, f: F) -> Result<(), Error<E>>
     where
         F: FnOnce(u8) -> u8,
@@ -537,7 +538,7 @@ where
         self.write_register(register, f(value)).await
     }
 
-    /// Sets some bits of a given register
+    /// Sets some bits of a given register.
     pub async fn set_register_bits(
         &mut self,
         register: Register,
@@ -546,7 +547,7 @@ where
         self.modify_register(register, |v| v | bits).await
     }
 
-    /// Clears some bits of a given register
+    /// Clears some bits of a given register.
     pub async fn clear_register_bits(
         &mut self,
         register: Register,
@@ -556,57 +557,81 @@ where
     }
 }
 
-/// Error type
+/// Error type.
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<I2cError> {
-    /// I2C bus error
+    /// I2C bus error.
     I2c(I2cError),
-    /// Attempted to write to a read-only register
+    /// Attempted to write to a read-only register.
     WriteToReadOnly,
-    /// Invalid parameter
+    /// Invalid parameter.
     InvalidParameter,
 }
 
-/// Status flags
+/// Status flags.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Status {
+    /// Logic OR of output OUTx bits.
+    /// This field is cleared by reading this register.
     pub output_status: bool,
+    /// Chip ready after internal reset.
     pub chip_ready: bool,
+    /// Indicates if registers are ready to be written.
     pub ready_to_write: bool,
+    /// Indicates if any channel button output data reaches the maximum
+    /// value (+0x7FF or -0x800). Cleared by a read of the status register.
     pub maximum_output_code: bool,
+    /// Reports an error has occurred and conversions have been halted.
+    /// Cleared by a read of the status register.
     pub fsm_watchdog_error: bool,
+    /// Reports an error when any LC oscillator fails to start.
+    /// Cleared by a read of the status register.
     pub lc_sensor_watchdog_error: bool,
+    /// Reports when any button is asserted for more than 50 seconds.
+    /// Cleared by a read of the status register.
+    /// When `DIS_BTN_TO` is set, no timeout is asserted.
     pub button_timeout: bool,
+    /// Reports if any register's value has an unexpected change.
+    /// Cleared by a read of the status register.
     pub register_integrity_bad: bool,
 }
 
-/// Channel output logic states
+/// Channel output logic states.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct OutputLogicStates {
+    /// Output Logic State for pre-processed data capture for any enabled channel.
+    /// Bit cleared on read.
     pub new_data_available: bool,
+    /// Button output logic state for channel 0.
     pub out0: bool,
+    /// Button output logic state for channel 1.
     pub out1: bool,
+    /// Button output logic state for channel 2.
     pub out2: bool,
+    /// Button output logic state for channel 3.
     pub out3: bool,
 }
 
-/// Channel operational mode
+/// Channel operational mode.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChannelMode {
+    /// Channel disabled.
     Disabled,
+    /// Channel enabled only in normal mode.
     NormalMode,
-    LowPowerMode,
+    /// Channel enabled both in normal and low power mode.
+    NormalAndLowPowerMode,
 }
 
-/// Scan rate in normal mode
+/// Scan rate in normal mode.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum ScanRate {
-    /// Continuous scanning without delay
+    /// Continuous scanning without delay.
     Continuous = 0x04,
     /// 160 SPS
     Highest = 0x08,
@@ -620,6 +645,7 @@ pub enum ScanRate {
     Lowest = 0x03,
 }
 
+/// Scan rate in low power mode.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
@@ -634,34 +660,43 @@ pub enum LowPowerScanRate {
     Low = 0x03,
 }
 
+/// Interrupt polarity.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum InterruptPolarity {
+    /// Set INTB pin polarity to active low.
     ActiveLow = 0,
+    /// Set INTB pin polarity to active high.
     ActiveHigh = 1,
 }
 
+/// Button output polarity for pin OUTX.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum OutputPolarity {
+    /// Set OUTX polarity to active low.
     ActiveLow = 0,
+    /// Set OUTX polarity to active high.
     ActiveHigh = 1,
 }
 
+/// Processed button algorithm data polarity for a channel.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum DataPolarity {
-    /// Data decreases as sensor increases
+    /// Data decreases as sensor increases.
     Inverted,
-    /// Data increases as sensor increases
+    /// Data increases as sensor increases.
     Normal,
 }
 
+/// Counter scale.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[allow(missing_docs)]
 #[repr(u8)]
 pub enum CounterScale {
     Zero = 0,
@@ -670,32 +705,45 @@ pub enum CounterScale {
     Three = 3,
 }
 
+/// Channel sensor Rp range selection.
+/// Set based on the actual sensor Rp physical parameter.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum RpRange {
+    /// 50 Ω ≤ Rp ≤ 4 kΩ
     Rp50OhmTo4kOhm = 0x00,
+    /// 800 Ω ≤ Rp ≤ 10 kΩ
     Rp800OhmTo10kOhm = 0x80,
 }
 
+/// Channel sensor frequency range selection.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum FrequencyRange {
+    /// 1 MHz to 3.3 MHz
     Freq1MHzTo3_3MHz = 0x00,
+    /// 3.3 MHz to 10 MHz
     Freq3_3MHzTo10MHz = 0x20,
+    /// 10 MHz to 30 MHz
     Freq10MHzTo30MHz = 0x40,
 }
 
+/// Sensor configuration struct.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SensorConfig {
+    /// Channel sensor Rp range selection.
     pub rp_range: RpRange,
+    /// Channel sensor frequency range selection.
     pub frequency_range: FrequencyRange,
+    /// Channel sensor cycle count.
     pub cycle_count: u8,
 }
 
 impl SensorConfig {
+    /// Default value for [`SensorConfig`].
     pub const fn const_default() -> Self {
         Self {
             rp_range: RpRange::Rp50OhmTo4kOhm,
@@ -705,8 +753,10 @@ impl SensorConfig {
     }
 }
 
+/// Fast Tracking Factor for button algorithm.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))] 
+#[allow(missing_docs)]
 #[repr(u8)]
 pub enum FastTrackingFactor {
     Zero = 0,
@@ -715,23 +765,36 @@ pub enum FastTrackingFactor {
     Three = 3,
 }
 
+/// Channel configuration struct.
 #[derive(Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ChannelConfig {
+    /// Channel operating mode.
     pub mode: ChannelMode,
+    /// Channel gain.
     pub gain: u8,
+    /// Channel output polarity.
     pub output_polarity: OutputPolarity,
+    /// Channel data polarity.
     pub data_polarity: DataPolarity,
+    /// Channel counter scale.
     pub counter_scale: CounterScale,
+    /// Channel sensor configuration.
     pub sensor_config: SensorConfig,
+    /// Channel FTF for button algorithm.
     pub fast_tracking_factor: FastTrackingFactor,
+    /// Whether to include the channel in the anticommon group.
     pub enable_anticommon_algorithm: bool,
+    /// Whether to include the channel in the antideform group.
     pub enable_antideform_algorithm: bool,
+    /// Whether to include the channel in the max-win group.
     pub enable_max_win_button_algorithm: bool,
+    /// Whether to pause baseline tracking when OUTX is asserted.
     pub baseline_tracking_pause: bool,
 }
 
 impl ChannelConfig {
+    /// Default value for [`ChannelConfig`].
     pub const fn const_default<T: ChannelRegisters>(_ch: T) -> Self {
         Self {
             mode: T::DEFAULT_MODE,
@@ -749,28 +812,46 @@ impl ChannelConfig {
     }
 }
 
+/// Device configuration struct.
 #[derive(Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DeviceConfig {
+    /// Configuration for channel 0.
     pub ch0: ChannelConfig,
+    /// Configuration for channel 1.
     pub ch1: ChannelConfig,
+    /// Configuration for channel 2.
     pub ch2: ChannelConfig,
+    /// Configuration for channel 3.
     pub ch3: ChannelConfig,
+    /// Scan rate in normal power mode.
     pub scan_rate: ScanRate,
+    /// Scan rate in low power mode.
     pub low_power_scan_rate: LowPowerScanRate,
+    /// Check if button algorithm generates codes outside maximum range.
     pub enable_max_out_check: bool,
+    /// Enable button time-out if if button pressed for more than 50 seconds.
     pub enable_button_timeout: bool,
+    /// Interrupt polarity.
     pub interrupt_polarity: InterruptPolarity,
+    /// Enable button press detection algorithm to assert events on OUTX pins.
     pub enable_button_press_detection_algorithm: bool,
+    /// Enable reset of button algorithm baseline tracking value.
     pub enable_reset_of_button_baseline_tracking: bool,
+    /// Normal power base increment for button algorithm.
     pub baseline_tracking_increment_np: u8,
+    /// Low power base increment for button algorithm.
     pub baseline_tracking_increment_lp: u8,
+    /// LC oscillation frequency divider.
     pub lc_divider: u8,
+    /// Hysteresis for threshold for button algorithm.
     pub hysteresis: u8,
+    /// Anti-twist for button algorithm.
     pub antitwist: u8,
 }
 
 impl DeviceConfig {
+    /// Default value for [`DeviceConfig`].
     pub const fn const_default() -> Self {
         Self {
             ch0: ChannelConfig::const_default(Channel0),
