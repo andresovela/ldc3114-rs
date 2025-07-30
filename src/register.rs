@@ -1,7 +1,8 @@
 use crate::ChannelMode;
 
 /// LDC3114 registers
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 #[allow(missing_docs)]
 pub enum Register {
@@ -190,6 +191,7 @@ pub(crate) const FTF3_OFFSET: u8 = 0;
 
 /// Channel registers
 pub trait ChannelRegisters: Copy {
+    const CH: u8;
     /// EN bit in the EN register
     const EN_BIT: u8;
     /// LP_EN bit in the EN register
@@ -229,24 +231,29 @@ pub trait ChannelRegisters: Copy {
 }
 
 /// Representation of registers for channel 0
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel0;
 
 /// Representation of registers for channel 1
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel1;
 
 /// Representation of registers for channel 2
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel2;
 
 /// Representation of registers for channel 3
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Channel3;
 
 macro_rules! impl_channel_registers {
-    ($ChType:ident: $Data:ident, $RawData:ident, $Gain:ident, $Sensor:ident, $Ftf:ident, $En:expr, $Lpen:expr, $Btpause:expr, $Maxwin:expr, $Opol:expr, $Dpol:expr, $Anticom:expr, $Antidform:expr, $CntscMask:expr, $CntscOffset:expr, $FtfMask:expr, $FtfOffset:expr, $DefaultMode:ident) => {
+    ($ChType:ident: $Ch:expr, $Data:ident, $RawData:ident, $Gain:ident, $Sensor:ident, $Ftf:ident, $En:expr, $Lpen:expr, $Btpause:expr, $Maxwin:expr, $Opol:expr, $Dpol:expr, $Anticom:expr, $Antidform:expr, $CntscMask:expr, $CntscOffset:expr, $FtfMask:expr, $FtfOffset:expr, $DefaultMode:ident) => {
         impl ChannelRegisters for $ChType {
+            const CH: u8 = $Ch;
             const EN_BIT: u8 = $En;
             const LPEN_BIT: u8 = $Lpen;
             const BTPAUSE_BIT: u8 = $Btpause;
@@ -279,7 +286,7 @@ macro_rules! impl_channel_registers {
     };
 }
 
-impl_channel_registers!(Channel0: Data0Lsb, RawData0_3, Gain0, Sensor0Config, Ftf0, EN0, LPEN0, BTPAUSE0, MAXWIN0, OPOL0, DPOL0, ANTICOM0, ANTIDFORM0, CNTSC0_MASK, CNTSC0_OFFSET, FTF0_MASK, FTF0_OFFSET, LowPowerMode);
-impl_channel_registers!(Channel1: Data1Lsb, RawData1_3, Gain1, Sensor1Config, Ftf1_2, EN1, LPEN1, BTPAUSE1, MAXWIN1, OPOL1, DPOL1, ANTICOM1, ANTIDFORM1, CNTSC1_MASK, CNTSC1_OFFSET, FTF1_MASK, FTF1_OFFSET, NormalMode);
-impl_channel_registers!(Channel2: Data2Lsb, RawData2_3, Gain2, Sensor2Config, Ftf1_2, EN2, LPEN2, BTPAUSE2, MAXWIN2, OPOL2, DPOL2, ANTICOM2, ANTIDFORM2, CNTSC2_MASK, CNTSC2_OFFSET, FTF2_MASK, FTF2_OFFSET, NormalMode);
-impl_channel_registers!(Channel3: Data3Lsb, RawData3_3, Gain3, Sensor3Config, Ftf3, EN3, LPEN3, BTPAUSE3, MAXWIN3, OPOL3, DPOL3, ANTICOM3, ANTIDFORM3, CNTSC3_MASK, CNTSC3_OFFSET, FTF3_MASK, FTF3_OFFSET, NormalMode);
+impl_channel_registers!(Channel0: 0, Data0Lsb, RawData0_3, Gain0, Sensor0Config, Ftf0, EN0, LPEN0, BTPAUSE0, MAXWIN0, OPOL0, DPOL0, ANTICOM0, ANTIDFORM0, CNTSC0_MASK, CNTSC0_OFFSET, FTF0_MASK, FTF0_OFFSET, LowPowerMode);
+impl_channel_registers!(Channel1: 1, Data1Lsb, RawData1_3, Gain1, Sensor1Config, Ftf1_2, EN1, LPEN1, BTPAUSE1, MAXWIN1, OPOL1, DPOL1, ANTICOM1, ANTIDFORM1, CNTSC1_MASK, CNTSC1_OFFSET, FTF1_MASK, FTF1_OFFSET, NormalMode);
+impl_channel_registers!(Channel2: 2, Data2Lsb, RawData2_3, Gain2, Sensor2Config, Ftf1_2, EN2, LPEN2, BTPAUSE2, MAXWIN2, OPOL2, DPOL2, ANTICOM2, ANTIDFORM2, CNTSC2_MASK, CNTSC2_OFFSET, FTF2_MASK, FTF2_OFFSET, NormalMode);
+impl_channel_registers!(Channel3: 3, Data3Lsb, RawData3_3, Gain3, Sensor3Config, Ftf3, EN3, LPEN3, BTPAUSE3, MAXWIN3, OPOL3, DPOL3, ANTICOM3, ANTIDFORM3, CNTSC3_MASK, CNTSC3_OFFSET, FTF3_MASK, FTF3_OFFSET, NormalMode);

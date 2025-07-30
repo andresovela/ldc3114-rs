@@ -10,6 +10,11 @@ const I2C_ADDR: u8 = 0x2A;
 /// Driver for the LDC3114
 pub struct Ldc3114<I2C> {
     i2c: I2C,
+    sency0: u8,
+    sency1: u8,
+    sency2: u8,
+    sency3: u8,
+    lcdiv: u8,
 }
 
 impl<I2C, E> Ldc3114<I2C>
@@ -18,7 +23,14 @@ where
 {
     /// Creates a new driver instance for the LDC3114
     pub fn new(i2c: I2C) -> Self {
-        Self { i2c }
+        Self { 
+            i2c,
+            sency0: 4,
+            sency1: 4,
+            sency2: 4,
+            sency3: 4,
+            lcdiv: 3,
+        }
     }
 
     /// Reads the device ID
@@ -82,6 +94,18 @@ where
 
     /// Enter normal mode (exit configuration mode)
     pub async fn normal_mode(&mut self) -> Result<(), Error<E>> {
+        let lcdiv = self.read_register(Register::LcDivider).await?;
+        let scfg0 = self.read_register(Register::Sensor0Config).await?;
+        let scfg1 = self.read_register(Register::Sensor1Config).await?;
+        let scfg2 = self.read_register(Register::Sensor2Config).await?;
+        let scfg3 = self.read_register(Register::Sensor3Config).await?;
+
+        self.lcdiv = lcdiv & 0x07;
+        self.sency0 = scfg0 & 0x1F;
+        self.sency1 = scfg1 & 0x1F;
+        self.sency2 = scfg2 & 0x1F;
+        self.sency3 = scfg3 & 0x1F;
+
         self.write_register(Register::Reset, 0).await
     }
 
@@ -108,14 +132,36 @@ where
     }
 
     /// Reads the pre-processed raw sensor data for the given channel
-    pub async fn read_raw_data(&mut self, ch: impl ChannelRegisters) -> Result<u32, Error<E>> {
+    /// 
+    /// The value returned is given by the following formula:
+    /// ```
+    /// f_sensor = 30 * W * 44_000_000 / raw_data
+    /// ```
+    /// where
+    /// ```
+    /// W = 128 * (1 + SENCY_n) * (2^LCDIV)
+    /// ```
+    pub async fn read_raw_data<T: ChannelRegisters>(&mut self, ch: T) -> Result<u32, Error<E>> {
         let mut buffer = [0; 4];
         let slice = &mut buffer[0..=2];
         self.i2c.write_read(I2C_ADDR, &[ch.raw_data_lsb() as u8], slice).await.map_err(Error::I2c)?;
 
-        // TODO: Figure out if this is a u32 or i32
         let data = u32::from_le_bytes(buffer);
-        Ok(data)
+        if data == 0 {
+            return Ok(0);
+        }
+        
+        let sency = match T::CH {
+            0 => self.sency0,
+            1 => self.sency1,
+            2 => self.sency2,
+            3 => self.sency3,
+            _ => unreachable!()
+        };
+
+        let w = 128 * (1 + sency as u32) * (2 << self.lcdiv as u32);
+        let fsensor = 30 * w as u64 * 44_000_000 / data as u64;
+        Ok(fsensor as u32)
     }
 
     /// Sets up the entire device configuration
@@ -511,7 +557,7 @@ where
 }
 
 /// Error type
-#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<I2cError> {
     /// I2C bus error
     I2c(I2cError),
@@ -522,7 +568,8 @@ pub enum Error<I2cError> {
 }
 
 /// Status flags
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Status {
     pub output_status: bool,
     pub chip_ready: bool,
@@ -535,7 +582,8 @@ pub struct Status {
 }
 
 /// Channel output logic states
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct OutputLogicStates {
     pub new_data_available: bool,
     pub out0: bool,
@@ -545,7 +593,8 @@ pub struct OutputLogicStates {
 }
 
 /// Channel operational mode
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChannelMode {
     Disabled,
     NormalMode,
@@ -553,7 +602,8 @@ pub enum ChannelMode {
 }
 
 /// Scan rate in normal mode
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum ScanRate {
     /// Continuous scanning without delay
@@ -570,7 +620,8 @@ pub enum ScanRate {
     Lowest = 0x03,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum LowPowerScanRate {
     /// 5 SPS
@@ -583,21 +634,24 @@ pub enum LowPowerScanRate {
     Low = 0x03,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum InterruptPolarity {
     ActiveLow = 0,
     ActiveHigh = 1,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum OutputPolarity {
     ActiveLow = 0,
     ActiveHigh = 1,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum DataPolarity {
     /// Data decreases as sensor increases
@@ -606,7 +660,8 @@ pub enum DataPolarity {
     Normal,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum CounterScale {
     Zero = 0,
@@ -615,14 +670,16 @@ pub enum CounterScale {
     Three = 3,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum RpRange {
     Rp50OhmTo4kOhm = 0x00,
     Rp800OhmTo10kOhm = 0x80,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum FrequencyRange {
     Freq1MHzTo3_3MHz = 0x00,
@@ -630,7 +687,8 @@ pub enum FrequencyRange {
     Freq10MHzTo30MHz = 0x40,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SensorConfig {
     pub rp_range: RpRange,
     pub frequency_range: FrequencyRange,
@@ -647,7 +705,8 @@ impl SensorConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))] 
 #[repr(u8)]
 pub enum FastTrackingFactor {
     Zero = 0,
@@ -656,7 +715,8 @@ pub enum FastTrackingFactor {
     Three = 3,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ChannelConfig {
     pub mode: ChannelMode,
     pub gain: u8,
@@ -689,7 +749,8 @@ impl ChannelConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DeviceConfig {
     pub ch0: ChannelConfig,
     pub ch1: ChannelConfig,
