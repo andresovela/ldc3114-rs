@@ -1,4 +1,4 @@
-name: No-Std Targets
+name: Build
 
 on:
   push:
@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup target add thumbv7m-none-eabi
-      - run: cargo check --locked --target thumbv7m-none-eabi
+      - run: cargo build --locked --target thumbv7m-none-eabi
+      - run: cargo build --locked --target thumbv7m-none-eabi --features async
+      - run: cargo build --locked --target thumbv7m-none-eabi --features defmt
